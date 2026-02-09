@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>쇼핑 리스트</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -194,22 +195,28 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'shopping-list';
+    // Supabase 설정
+    const SUPABASE_URL = 'https://dvoakfhnpfptrlcampqj.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2b2FrZmhucGZwdHJsY2FtcHFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA2MzgzNzEsImV4cCI6MjA4NjIxNDM3MX0.PDMvX-M5_r5O39Axn4JJdQ0lUiZKoJcSETJnWrdpLRY';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    function load() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-      } catch {
-        return [];
+    // 메모리 캐시 (렌더링 성능용)
+    let items = [];
+
+    async function loadItems() {
+      const { data, error } = await supabase
+        .from('shopping_items')
+        .select('*')
+        .order('created_at', { ascending: true });
+      if (error) {
+        console.error('데이터 로드 실패:', error);
+        return;
       }
-    }
-
-    function save(items) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      items = data;
+      render();
     }
 
     function render() {
-      const items = load();
       const listEl = document.getElementById('list');
       const emptyEl = document.getElementById('empty');
       const statsEl = document.getElementById('stats');
@@ -225,16 +232,16 @@
       const done = items.filter(i => i.checked).length;
       statsEl.innerHTML = `<span>전체 ${items.length}개</span><span>완료 ${done}개</span>`;
 
-      listEl.innerHTML = items.map((item, i) => `
+      listEl.innerHTML = items.map((item) => `
         <li class="item ${item.checked ? 'checked' : ''}">
-          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggle(${i})">
+          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggle(${item.id})">
           <span class="name">${escapeHtml(item.name)}</span>
           <div class="qty-control">
-            <button onclick="changeQty(${i}, -1)">-</button>
+            <button onclick="changeQty(${item.id}, -1)">-</button>
             <span class="qty-value">${item.qty}</span>
-            <button onclick="changeQty(${i}, 1)">+</button>
+            <button onclick="changeQty(${item.id}, 1)">+</button>
           </div>
-          <button class="delete-btn" onclick="remove(${i})" title="삭제">&times;</button>
+          <button class="delete-btn" onclick="remove(${item.id})" title="삭제">&times;</button>
         </li>
       `).join('');
     }
@@ -245,48 +252,79 @@
       return d.innerHTML;
     }
 
-    function addItem() {
+    async function addItem() {
       const input = document.getElementById('itemInput');
       const qtyInput = document.getElementById('qtyInput');
       const name = input.value.trim();
       if (!name) return;
 
       const qty = Math.max(1, parseInt(qtyInput.value) || 1);
-      const items = load();
-      items.push({ name, qty, checked: false });
-      save(items);
+      const { error } = await supabase
+        .from('shopping_items')
+        .insert({ name, qty, checked: false });
+
+      if (error) {
+        console.error('항목 추가 실패:', error);
+        return;
+      }
+
       input.value = '';
       qtyInput.value = 1;
       input.focus();
-      render();
+      await loadItems();
     }
 
-    function changeQty(index, delta) {
-      const items = load();
-      items[index].qty = Math.max(1, (items[index].qty || 1) + delta);
-      save(items);
-      render();
+    async function changeQty(id, delta) {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+      const newQty = Math.max(1, (item.qty || 1) + delta);
+
+      const { error } = await supabase
+        .from('shopping_items')
+        .update({ qty: newQty })
+        .eq('id', id);
+
+      if (error) {
+        console.error('수량 변경 실패:', error);
+        return;
+      }
+      await loadItems();
     }
 
-    function toggle(index) {
-      const items = load();
-      items[index].checked = !items[index].checked;
-      save(items);
-      render();
+    async function toggle(id) {
+      const item = items.find(i => i.id === id);
+      if (!item) return;
+
+      const { error } = await supabase
+        .from('shopping_items')
+        .update({ checked: !item.checked })
+        .eq('id', id);
+
+      if (error) {
+        console.error('상태 변경 실패:', error);
+        return;
+      }
+      await loadItems();
     }
 
-    function remove(index) {
-      const items = load();
-      items.splice(index, 1);
-      save(items);
-      render();
+    async function remove(id) {
+      const { error } = await supabase
+        .from('shopping_items')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('삭제 실패:', error);
+        return;
+      }
+      await loadItems();
     }
 
     document.getElementById('itemInput').addEventListener('keydown', e => {
       if (e.key === 'Enter') addItem();
     });
 
-    render();
+    loadItems();
   </script>
 </body>
 </html>

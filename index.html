@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>쇼핑 리스트</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: #1a1a2e;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .input-row input[type="text"] {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 16px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-row input[type="number"] {
+      width: 64px;
+      padding: 12px 8px;
+      font-size: 16px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      outline: none;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+
+    .input-row input:focus {
+      border-color: #4a6cf7;
+    }
+
+    .input-row button {
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: #4a6cf7;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    .input-row button:hover { background: #3a5ce5; }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 12px;
+      padding: 0 4px;
+    }
+
+    .list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      transition: opacity 0.2s;
+    }
+
+    .item.checked { opacity: 0.55; }
+
+    .item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: #4a6cf7;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .item .name {
+      flex: 1;
+      font-size: 16px;
+      color: #333;
+      transition: text-decoration 0.2s;
+      word-break: break-word;
+    }
+
+    .item.checked .name {
+      text-decoration: line-through;
+      color: #aaa;
+    }
+
+    .qty-control {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .qty-control button {
+      width: 26px;
+      height: 26px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #f8f8f8;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      color: #555;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .qty-control button:hover { background: #eee; }
+
+    .qty-control .qty-value {
+      min-width: 28px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #4a6cf7;
+    }
+
+    .item .delete-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      color: #ccc;
+      cursor: pointer;
+      padding: 0 4px;
+      transition: color 0.2s;
+      flex-shrink: 0;
+    }
+
+    .item .delete-btn:hover { color: #e74c3c; }
+
+    .empty {
+      text-align: center;
+      color: #bbb;
+      padding: 40px 0;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>🛒 쇼핑 리스트</h1>
+
+    <div class="input-row">
+      <input type="text" id="itemInput" placeholder="추가할 항목 입력..." autofocus>
+      <input type="number" id="qtyInput" value="1" min="1" max="99">
+      <button onclick="addItem()">추가</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+    <ul class="list" id="list"></ul>
+    <div class="empty" id="empty">리스트가 비어있습니다</div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'shopping-list';
+
+    function load() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    function save(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+
+    function render() {
+      const items = load();
+      const listEl = document.getElementById('list');
+      const emptyEl = document.getElementById('empty');
+      const statsEl = document.getElementById('stats');
+
+      if (items.length === 0) {
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+        statsEl.textContent = '';
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+      const done = items.filter(i => i.checked).length;
+      statsEl.innerHTML = `<span>전체 ${items.length}개</span><span>완료 ${done}개</span>`;
+
+      listEl.innerHTML = items.map((item, i) => `
+        <li class="item ${item.checked ? 'checked' : ''}">
+          <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggle(${i})">
+          <span class="name">${escapeHtml(item.name)}</span>
+          <div class="qty-control">
+            <button onclick="changeQty(${i}, -1)">-</button>
+            <span class="qty-value">${item.qty}</span>
+            <button onclick="changeQty(${i}, 1)">+</button>
+          </div>
+          <button class="delete-btn" onclick="remove(${i})" title="삭제">&times;</button>
+        </li>
+      `).join('');
+    }
+
+    function escapeHtml(text) {
+      const d = document.createElement('div');
+      d.textContent = text;
+      return d.innerHTML;
+    }
+
+    function addItem() {
+      const input = document.getElementById('itemInput');
+      const qtyInput = document.getElementById('qtyInput');
+      const name = input.value.trim();
+      if (!name) return;
+
+      const qty = Math.max(1, parseInt(qtyInput.value) || 1);
+      const items = load();
+      items.push({ name, qty, checked: false });
+      save(items);
+      input.value = '';
+      qtyInput.value = 1;
+      input.focus();
+      render();
+    }
+
+    function changeQty(index, delta) {
+      const items = load();
+      items[index].qty = Math.max(1, (items[index].qty || 1) + delta);
+      save(items);
+      render();
+    }
+
+    function toggle(index) {
+      const items = load();
+      items[index].checked = !items[index].checked;
+      save(items);
+      render();
+    }
+
+    function remove(index) {
+      const items = load();
+      items.splice(index, 1);
+      save(items);
+      render();
+    }
+
+    document.getElementById('itemInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') addItem();
+    });
+
+    render();
+  </script>
+</body>
+</html>
